@@ -8,6 +8,7 @@ The tool is written in Python 3. It is recommended to use virtualenv to run the 
 
 ### Virtualenv
 `sudo apt-get install python3-pip`
+
 `sudo pip3 install virtualenv`
 
 ### Fitness Tracker Analysis Tool
@@ -71,11 +72,11 @@ class App(Device):
 ## License
 This project is licensed under MIT.
 Third Party Software which are distributed under their own terms can be found under the following paths:
-Report/static/css/bootstrap/
-Report/static/js/bootstrap/
-Report/static/js/jquery/
-Report/static/js/zingchart/
-Utils/geohash.py
+- Report/static/css/bootstrap/
+- Report/static/js/bootstrap/
+- Report/static/js/jquery/
+- Report/static/js/zingchart/
+- Utils/geohash.py
 
 The MIT License (MIT)
 
