@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-6 col-md-6 col-sm-6">
+            Filter time: <input type="date" id="date" onchange="search_time()"
+                                placeholder="Search for date.." title="Type in date">
+            <input type="text" id="time" onkeyup="search_time()"
+                   placeholder="12:00" title="Type in time"> <br>
+            Search text: <input type="datetime-local" id="text" onkeyup="search_text()"
+                                placeholder="Search for text.." title="Type in text">
+        </div>
+    </div>
+</div>
+<br>
+<br>
+
+<h3>Log</h3>
+<ul id="log_list_main" class="list-group list-group-flush">
+    {% for item in data_main %}
+    <li class="list-group-item"><b>{{item[0]}}</b> {{item[1]}}</li>
+    {% endfor %}
+</ul>
+
+<script>
+    // functions to search and filter the logs.
+    function search_text() {
+        var input, filter, ul, li, b;
+        input = document.getElementById("text");
+        filter = input.value.toUpperCase();
+
+        ul = document.getElementById("log_list_main");
+        li = ul.getElementsByTagName("li");
+        for (i = 0; i < li.length; i++) {
+            if (li[i].innerHTML.toUpperCase().indexOf(filter) > -1) {
+                li[i].style.display = "";
+            } else {
+                li[i].style.display = "none";
+            }
+        }
+    }
+
+    function search_time() {
+        var input1, input2, input, filter, ul, li, b, i;
+        input1 = document.getElementById("date").value;
+        input2 = document.getElementById("time").value;
+        filter =  input1 + " " + input2;
+
+        ul = document.getElementById("log_list_main");
+        li = ul.getElementsByTagName("li");
+        for (i = 0; i < li.length; i++) {
+            b = li[i].getElementsByTagName("b")[0];
+            if (b.innerHTML.toUpperCase().indexOf(filter) > -1) {
+                li[i].style.display = "";
+            } else {
+                li[i].style.display = "none";
+            }
+        }
+    }
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Intro -->
+        <div class="col-lg-6 col-md-6 col-sm-6">
+            <h5>You are looking at the period from {{ from_str }} to {{ until_str }}.</h5>
+            <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#manualManual">
+                Manual
+            </button>
+            <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#optionManual">
+                Options
+            </button>
+            <!-- Manual Modal -->
+            <div class="modal fade" id="manualManual" tabindex="-1" role="dialog"
+                 aria-labelledby="manualLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4 class="modal-title" id="manualLabel">Manual - Map Report</h4>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            The Map Report shows all performed and recorded activities with recorded route
+                            over the last 365 days. If you want to view a specific period,
+                            than you can change it in the options.
+                            <h5>All Tracks</h5>
+                            All tracks in the period are listed in this list.
+                            A click on the track id directs you to a specific report for this track.
+                            Bold tracks are conspicuous long tracks (Longer than 75% of all tracks).
+                            <h5>Data Chart</h5>
+                            All tracks in the period are displayed in the chart, which shows the weekdays and time.
+                            The bigger the bubble, the longer the activity took.
+                            Track, which took longer than 75% of all tracks are marked red.
+                            <h5>Map</h5>
+                            All tracks in the period are displayed in Google Maps.
+                            At the start point is a marker, which shows more information about the track, when clicked.
+                            So, a click on the shown track id redirects you to specific report for this track.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Option Modal -->
+            <div class="modal fade" id="optionManual" tabindex="-1" role="dialog"
+                 aria-labelledby="optionLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="optionLabel">Options</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <form action="/map" method="POST">
+                                <div class="container-fluid">
+                                    <div class="row">
+                                        <div class="col">From</div>
+                                        <div class="col">
+                                            <input type="date" name="from" value="{{ from_str }}">
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col">Until</div>
+                                        <div class="col">
+                                            <input type="date" name="until" value="{{ until_str }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <input type="submit" value="Submit">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Intro end -->
+        <div class="col-lg-6 col-md-6 col-sm-12">
+            <h5>All Tracks</h5>
+            <div data-spy="scroll" data-offset="0" style="height:150px; overflow-y: scroll">
+                <ul class="list-group">
+                    {% if all_tracks|length < 1 %}No recorded tracks were found.{% endif %}
+                    {% for item in all_tracks -%}
+                    <li class="list-group-item">
+                        {% if item[3] > duration_q3 %}<b>{% endif %}
+                        {{ item[0] }} - {{ item[1] }}: <a href="map/{{ item[2] }}">{{ item[2] }}</a>
+                        <br>
+                        {{ item[3] }} Minutes
+                        {% if item[3] > duration_q3 %}</b>{% endif %}
+                    </li>
+                    {%- endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div id="activity_chart"></div>
+        </div>
+    </div>
+</div>
+    <div id="map" style="background:yellow"></div>
+
+<script>
+    function getRandomColor() {
+        var letters = '0123456789ABCDEF';
+        var color = '#';
+        for (var i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+
+    // Setup and render Google Maps
+    function myMap() {
+        var mapOptions = {
+            center: new google.maps.LatLng(0,0), // (49.58, 11.01),
+            zoom: 15,
+            mapTypeId: google.maps.MapTypeId.HYBRID
+        }
+        var map = new google.maps.Map(document.getElementById("map"), mapOptions);
+
+        var my_points = {{ gps_data | tojson }};
+
+        var bounds = new google.maps.LatLngBounds ();
+        var marker_index = 0;
+        my_points.forEach(function(track) {
+            var points = [];
+            var start = track[0][2];
+            var end = "";
+            var track_id = track[0][3];
+
+            track.forEach(function(element) {
+                var lat = element[0];
+                var lon = element[1];
+                end = element[2];
+                var p = new google.maps.LatLng(lat, lon);
+                points.push(p);
+                bounds.extend(p);
+            });
+
+            var poly = new google.maps.Polyline({
+                path: points,
+                strokeColor: getRandomColor(),
+                strokeOpacity: .7,
+                icons: [{
+                    icon: {path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW},
+                    offset: '100%',
+                    repeat: '200px'
+                }],
+                strokeWeight: 4
+            });
+
+            var marker = new google.maps.Marker({
+                position: points[0],
+                label: marker_index.toString(),
+                map: map,
+                title: start + " - " + end
+            });
+            var contentString = '<div id="content">'+
+                '<h4 id="firstHeading" class="firstHeading"> Track ID - ' + track_id + '</h4>' +
+                '<div id="bodyContent"><p>' +
+                'Start: ' + start + '<br>' +
+                'End: ' + end + '<br>' +
+                '<a class="btn" href="/map/' + track_id + '">Click here to see more Information</a>'
+                '</p></div></div>';
+
+            var infowindow = new google.maps.InfoWindow({
+                content: contentString
+            });
+
+            marker.addListener('click', function() {
+                infowindow.open(map, marker);
+            });
+            poly.setMap(map);
+            marker_index++;
+        });
+        // fit bounds to track
+        map.fitBounds(bounds);
+    }
+
+    // Setup and render bubble chart
+    function renderActivity(){
+        var myConfig = {
+            "type": "hbubble",
+            "scale-x": {
+                    "zooming":true,
+                    "shadow": 1,
+                    "min-value":"0", //12:00 first day
+                    "max-value":"82800000", //12:00 second day
+                    "step":"3600000", //1 hour
+                    "transform":{
+                        "type":"date",
+                        "all": "%H:%i"
+                    },
+                    "label": {
+                        "text":"Hours"
+                    }
+            },
+            "scale-y":{
+                "values":["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            },
+            "tooltip": {
+                "text": "%node-size-value mintues<br>%vt - %kt<br>"
+            },
+            "series": [
+                {
+                    "values": {{ bubbles[0]|tojson }}
+                },
+                {
+                    "values": {{ bubbles[1]|tojson }}
+                }
+            ]
+        };
+        zingchart.node_click = function(p) {
+            var data = {{ ids|tojson }};
+            var plotindex = p['plotindex'];
+            var nodeindex = p['nodeindex'];
+            window.location.href = "/map/" + data[plotindex][nodeindex];
+        }
+        zingchart.render({
+            id : 'activity_chart',
+            data : myConfig
+        });
+    }
+
+    renderActivity();
+
+</script>
+<!-- <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBJ8rmvO-IFD7mXiaF91lhY7P1Fu1L5fvA&callback=myMap"></script> -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_apiKey }}&callback=myMap"></script>
+{% endblock %}

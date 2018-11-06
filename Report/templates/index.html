@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+ <div class="row">
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div class="m-3">
+                <h2>Welcome!</h2>
+                <p>
+                    This program is developed to analyze common fitness trackers as part of a Bachelor Thesis by Florian Hantke.
+                    Below you can find all performed analyses ordered by date.
+                    You can either analyze a single device, or select several devices to compare the findings.
+                </p>
+                <br>
+                <p>The Hash of the database is <b>{{ hash }}</b></p>
+                <button class="btn btn-block btn-lg btn-secondary" data-toggle="button" aria-expanded="false" onclick="toggle_cb()">Select/Deselect all analysis</button>
+                <input class="btn btn-block btn-lg btn-secondary" type="submit" form="compareForm" value="Compare selected analysis">
+                </div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <form id="compareForm" class="m-3 border rounded" action="/compare" method="POST">
+                <div data-spy="scroll" data-offset="0" style="height:80vh; overflow-y: scroll">
+                    <ul class="list-group">
+                    {% for item in device_data -%}
+                    <li class="list-group-item">
+                        <input class="aly_cb" id="{{ item['timestamp'] }}" type="checkbox"
+                               name="a:{{ item['timestamp'] }}:{{ item['name'] }}:{{ item['method'] }}:"
+                               checked>
+                        <b>{{ item['timestamp_str'] }}</b>
+                        {{ item['name'] }} - {{ item['method'] }}
+                        <br>
+                        <a class="btn btn-info" role="button"
+                            href="/?time_of_aly={{ item['timestamp'] }}">Analyse</a>
+                        <a class="btn btn-danger" role="button"
+                            href="/remove/{{ item['timestamp'] }}">Delete</a>
+                    </li>
+                    {%- endfor %}
+                    </ul>
+                </div>
+            </form>
+        </div>
+ </div>
+<script>
+// Toggles the checkbox of all analysis
+checked = true
+function toggle_cb(){
+    var cbs = document.getElementsByClassName("aly_cb");
+    var i;
+    checked = !checked;
+    for (i = 0; i < cbs.length; i++) {
+        cbs[i].checked = checked;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,419 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row bg-light">
+        <h5 class="ml-3 mr-3">
+            You are looking at the period from {{ from_str }} to {{ until_str }}.
+        </h5>
+    </div>
+    <div class="row">
+        <!-- Intro -->
+        <div class="col-lg-6 col-md-6 col-sm-6 bg-light">
+            <div class="m-3">
+                <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#manualManual">
+                    Manual
+                </button>
+                <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#optionManual">
+                    Options
+                </button>
+                <!-- Manual Modal -->
+                <div class="modal fade" id="manualManual" tabindex="-1" role="dialog"
+                     aria-labelledby="manualLabel" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h4 class="modal-title" id="manualLabel">Manual - Compare Report</h4>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                The compare report shows four charts with information about steps, heart rate,
+                                acceleration and sleep.
+                                Each chart provides the selected analysis.
+                                You can zoom in with your mouse by selecting a time period.
+                                With right click it is possible to export the chart as PDF or image.
+                                Furthermore, you can zoom out with a right click.
+                                <br>
+                                In the options you can select the accuracy and the time period you want to investigate.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Option Modal -->
+                <div class="modal fade" id="optionManual" tabindex="-1" role="dialog"
+                     aria-labelledby="optionLabel" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="optionLabel">Options</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <form action="/compare" method="POST">
+                                    {% for item in requested_analyses -%}
+                                    <input type="hidden" name="{{ item }}">
+                                    {%- endfor %}
+                                    <div class="container-fluid">
+                                        <div class="row">
+                                            <div class="col">From</div>
+                                            <div class="col">
+                                                <input type="date" name="from" value="{{ from_str }}">
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col">Until</div>
+                                            <div class="col">
+                                                <input type="date" name="until" value="{{ until_str }}">
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col">Accuracy</div>
+                                            <div class="col">
+                                                <select name="accuracy">
+                                                    <option {% if accuracy == "Seconds" %}selected=""{% endif %}>Seconds</option>
+                                                    <option {% if accuracy == "Minutes" %}selected=""{% endif %}>Minutes</option>
+                                                    <option {% if accuracy == "Hours" %}selected=""{% endif %}>Hours</option>
+                                                    <option {% if accuracy == "Days" %}selected=""{% endif %}>Days</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center">
+                                        <input type="submit" value="Submit">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-md-6 col-sm-6 bg-light">
+            <div class="d-flex flex-wrap m-3">
+                {% for device in devices -%}
+                <div class="p-2">
+                <h5>
+                <span class="badge badge-pill badge-info" style="background-color:{{ device[1] }}">
+                    {{ device[0] }}
+                </span>
+                </h5>
+            </div>
+                {%- endfor %}
+            </div>
+        </div>
+        <!-- Intro end -->
+
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="steps_chart"></div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="heartrate_chart"></div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="acceleration_chart"></div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="sleep_chart"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // JS generates all configs and renders the charts.
+    step_size = 0;
+    stepsConf = {};
+    sleepConf = {};
+    accelerationConf = {};
+    heartrateConf = {};
+    parallel_chart = false;
+
+    switch("{{ accuracy }}") {
+        case "Seconds":
+            step_size = 1000;
+            break;
+        case "Minutes":
+            step_size = 1000*60;
+            break;
+        case "Hours":
+            step_size = 1000*60*60;
+            break;
+        case "Days":
+            step_size = 1000*60*60*24;
+            break;
+    }
+
+    function genSleepConfig() {
+        sleep_labels = {{ labels | tojson }};
+        sleep_labels.push(
+                {"text":"Sleep",
+                "font-family":"Georgia",
+                "font-size":"30",
+                "x":"80%",
+                "y":"20%"});
+        sleep_data = {{ sleep_data | tojson }};
+        sleepConfig = {
+            "type": "bar",
+            "plotarea": {
+                "marginTop": "35%",
+                "marginBottom": "45%"
+            },
+            "zoom":{"shared":true,},
+            "scroll-x": { },
+            "crosshair-x": {"shared":true},
+            "labels": sleep_labels,
+            "plot": {"tooltip": {"visible": false}},
+            "scale-y": {
+                "values":["awake", "asleep"]
+            },
+            "scale-x": {
+                "zooming":true,
+                "min-value": {{ from_date }},
+                "shadow": 0,
+                "step": step_size,
+                "transform": {
+                    "type": "date",
+                    "all": "%Y-%m-%d<br />%H:%i:%s",
+                    "guide": {
+                        "visible": false
+                    },
+                    "item": {
+                        "visible": false
+                    }
+                },
+                "label": {
+                    "visible": false
+                },
+                "minor-ticks": 0
+            },
+            "series":sleep_data
+        };
+
+        if (parallel_chart){
+            configs = [];
+            for(var i=0; i < sleep_labels.length; i++) {
+                var label = sleep_labels[i];
+                label["text"] = label["text"].replace(/[0-9]/g, "0");
+                label["x"] = "90%";
+
+                var conf = JSON.parse(JSON.stringify(sleepConfig));
+                conf["series"] = [sleep_data[i]];
+                conf["labels"] = [label];
+                configs.push(conf);
+            }
+            sleepConfig = {
+                "layout":sleep_labels.length+"x1",
+                "graphset":configs
+            };
+        }
+    }
+
+    function genStepsConfig() {
+        step_labels = {{ labels | tojson }};
+        step_labels.push(
+                {"text":"Steps",
+                "font-family":"Georgia",
+                "font-size":"30",
+                "x":"80%",
+                "y":"20%"});
+        step_data = {{ step_data | tojson }};
+        stepsConfig = {
+            "type": "bar",
+            "zoom":{"shared":true,},
+            "scroll-x": { },
+            "crosshair-x": {"shared":true},
+            "labels": step_labels,
+            "plot": {"tooltip": {"visible": false}},
+            "scale-x": {
+                "zooming":true,
+                "min-value": {{ from_date }},
+                "shadow": 0,
+                "step": step_size,
+                "transform": {
+                    "type": "date",
+                    "all": "%Y-%m-%d<br />%H:%i:%s",
+                    "guide": {
+                        "visible": false
+                    },
+                    "item": {
+                        "visible": false
+                    }
+                },
+                "label": {
+                    "visible": false
+                },
+                "minor-ticks": 0
+            },
+            "series":step_data
+        };
+
+        if (parallel_chart){
+            configs = [];
+            for(var i=0; i < step_labels.length; i++) {
+                var label = step_labels[i];
+                label["text"] = label["text"].replace(/[0-9]/g, "0");
+                label["x"] = "90%";
+
+                var conf = JSON.parse(JSON.stringify(stepsConfig));
+                conf["series"] = [step_data[i]];
+                conf["labels"] = [label];
+                configs.push(conf);
+            }
+            stepsConfig = {
+                "layout":step_labels.length+"x1",
+                "graphset":configs
+            };
+        }
+    }
+
+
+    function genHeartrateConfig() {
+        heartrate_labels = {{ labels | tojson }};
+        heartrate_labels.push(
+                {"text":"Heartrate",
+                "font-family":"Georgia",
+                "font-size":"30",
+                "x":"80%",
+                "y":"20%"});
+        heartrate_data = {{ heartrate_data | tojson }};
+        heartrateConfig = {
+            "type": "bar",
+            "zoom":{"shared":true,},
+            "scroll-x": { },
+            "crosshair-x": {"shared":true},
+            "labels": heartrate_labels,
+            "plot": {"tooltip": {"visible": false}},
+            "scale-x": {
+                "zooming":true,
+                "min-value": {{ from_date }},
+                "shadow": 0,
+                "step": step_size,
+                "transform": {
+                    "type": "date",
+                    "all": "%Y-%m-%d<br />%H:%i:%s",
+                    "guide": {
+                        "visible": false
+                    },
+                    "item": {
+                        "visible": false
+                    }
+                },
+                "label": {
+                    "visible": false
+                },
+                "minor-ticks": 0
+            },
+            "series":heartrate_data
+        };
+
+        if (parallel_chart){
+            configs = [];
+            for(var i=0; i < heartrate_labels.length; i++) {
+                var label = heartrate_labels[i];
+                label["text"] = label["text"].replace(/[0-9]/g, "0");
+                label["x"] = "90%";
+
+                var conf = JSON.parse(JSON.stringify(heartrateConfig));
+                conf["series"] = [heartrate_data[i]];
+                conf["labels"] = [label];
+                configs.push(conf);
+            }
+            heartrateConfig = {
+                "layout":heartrate_labels.length+"x1",
+                "graphset":configs
+            };
+        }
+    }
+
+
+    function genAccelerationConfig() {
+        acceleration_labels = {{ labels | tojson }};
+        acceleration_labels.push(
+                {"text":"Accleration",
+                "font-family":"Georgia",
+                "font-size":"30",
+                "x":"80%",
+                "y":"20%"});
+        acceleration_data = {{ acceleration_data | tojson }};
+        accelerationConfig = {
+            "type": "bar",
+            "zoom":{"shared":true,},
+            "scroll-x": { },
+            "crosshair-x": {"shared":true},
+            "labels": acceleration_labels,
+            "plot": {"tooltip": {"visible": false}},
+            "scale-y":{
+                "values":"0:100:20",
+                "format":"%v%",
+                "guide":{
+                    "line-style":"dashdot"
+                }
+            },
+            "scale-x": {
+                "zooming":true,
+                "min-value": {{ from_date }},
+                "shadow": 0,
+                "step": step_size,
+                "transform": {
+                    "type": "date",
+                    "all": "%Y-%m-%d<br />%H:%i:%s",
+                    "guide": {
+                        "visible": false
+                    },
+                    "item": {
+                        "visible": false
+                    }
+                },
+                "label": {
+                    "visible": false
+                },
+                "minor-ticks": 0
+            },
+            "series":acceleration_data
+        };
+
+        if (parallel_chart){
+            configs = [];
+            for(var i=0; i < acceleration_labels.length; i++) {
+                var label = acceleration_labels[i];
+                label["text"] = label["text"].replace(/[0-9]/g, "0");
+                label["x"] = "90%";
+
+                var conf = JSON.parse(JSON.stringify(accelerationConfig));
+                conf["series"] = [acceleration_data[i]];
+                conf["labels"] = [label];
+                configs.push(conf);
+            }
+            accelerationConfig = {
+                "layout":acceleration_labels.length+"x1",
+                "graphset":configs
+            };
+        }
+    }
+
+    genAccelerationConfig();
+    zingchart.render({
+        id: 'acceleration_chart',
+        data: accelerationConfig
+    });
+    genStepsConfig();
+    zingchart.render({
+        id: 'steps_chart',
+        data: stepsConfig
+    });
+    genHeartrateConfig();
+    zingchart.render({
+        id: 'heartrate_chart',
+        data: heartrateConfig
+    });
+    genSleepConfig();
+    zingchart.render({
+        id: 'sleep_chart',
+        data: sleepConfig
+    });
+
+</script>
+{% endblock %}

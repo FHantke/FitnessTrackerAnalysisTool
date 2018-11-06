@@ -1,0 +1,449 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Intro -->
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <h5>You are looking at track {{ track_id }} from {{ gps_data[0][2] }} to {{ gps_data[-1][2] }}.</h5>
+        </div>
+        <div class="col-lg-6 col-md-6 col-sm-6">
+            <div class="mb-3">
+            <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#manualManual">
+                Manual
+            </button>
+            <button type="button" class="btn btn-secondary btn-block" data-toggle="modal" data-target="#optionManual">
+                Options
+            </button>
+            <button class="btn btn-secondary btn-block" onclick="toggleMarker()">Activate/Deactivate Marker</button>
+            <!-- Manual Modal -->
+            <div class="modal fade" id="manualManual" tabindex="-1" role="dialog"
+                 aria-labelledby="manualLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4 class="modal-title" id="manualLabel">Manual - Detailed Map Report</h4>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            The detailed Map Report shows the path of one specific path and statistics about it.
+                            You can change the accuracy in the option, however the default is per minute.
+                            <h5>Map</h5>
+                            The Google Map shows the track and marks all the recorded positions.
+                            By clicking on a marker, it provides further information and can be marked as interesting.
+                            Furthermore, the time can be seen in the statistics chart.
+                            Since it is Google Maps, you can use Street View by dragging the yellow guy on the map.
+                            <h5>Statistics Chart</h5>
+                            The statistics chart shows the steps and heartrate of the user at
+                            over the time of the activity. You can zoom by marking a particular period.
+                            By hovering over the timeline, you can follow the movement on Google Maps.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Option Modal -->
+            <div class="modal fade" id="optionManual" tabindex="-1" role="dialog"
+                 aria-labelledby="optionLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="optionLabel">Options</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+
+                            <form action="/map/{{ track_id }}" method="POST">
+                                Accuracy:
+                                <select name="accuracy">
+                                    <option {% if accuracy == "Seconds" %}selected=""{% endif %}>Seconds</option>
+                                    <option {% if accuracy == "Minutes" %}selected=""{% endif %}>Minutes</option>
+                                    <option {% if accuracy == "Hours" %}selected=""{% endif %}>Hours</option>
+                                    <option {% if accuracy == "Days" %}selected=""{% endif %}>Days</option>
+                                </select>
+                                <input type="submit" value="Submit">
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+        <div class="col-lg-6 col-md-6 col-sm-6">
+            <div class="mb-3">
+            <button class="btn btn-secondary btn-block" onclick="toggle_parallel_chart()">Toggle Parallel</button>
+            <button class="btn btn-secondary btn-block" onclick="zingchart.exec('myChart', 'viewall')">View All</button>
+            <button class="btn btn-secondary btn-block" onclick="zingchart.exec('myChart', 'zoomout')">Zoom Out</button>
+            </div>
+        </div>
+        <!-- Intro end -->
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div id="detail_chart"></div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="map" style="height:450px;"></div>
+        </div>
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div id="myChart"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var markers = [];
+    var interest = [];
+    var markers_times = [];
+    var map;
+    var panorama;
+    var myConfig;
+    var show_marker = true;
+    var old_pos = [-1,null];
+    var parallel_chart = false;
+    var step_size = 0;
+    switch("{{ accuracy }}") {
+        case "Seconds":
+            step_size = 1000;
+            break;
+        case "Minutes":
+            step_size = 1000*60;
+            break;
+        case "Hours":
+            step_size = 1000*60*60;
+            break;
+        case "Days":
+            step_size = 1000*60*60*24;
+            break;
+    }
+
+function myMap() {
+        var mapOptions = {
+            center: new google.maps.LatLng(49.58, 11.01),
+            zoom: 15,
+            mapTypeId: google.maps.MapTypeId.HYBRID
+        }
+        map = new google.maps.Map(document.getElementById("map"), mapOptions);
+        panorama = map.getStreetView();
+       
+        var track = {{ gps_data | tojson }};
+
+        var bounds = new google.maps.LatLngBounds ();
+        var points = [];
+        var start = track[0][2];
+        var end = "";
+        var i = 0;
+
+        track.forEach(function(element) {
+            //console.log(element);
+            var lat = element[0];
+            var lon = element[1];
+            end = element[2];
+            var p = new google.maps.LatLng(lat, lon);
+            points.push(p);
+            bounds.extend(p);
+
+            var marker = new google.maps.Marker({
+                position: p,
+                label: i.toString(),
+                map: null,
+                title: element[2]
+            });
+            var node_index = Math.floor((element[3] - {{ from_date }}) / step_size);
+            var heartrate = zingchart.exec('myChart', 'getnodevalue', {plotindex : 0, nodeindex : node_index});
+            var steps = zingchart.exec('myChart', 'getnodevalue', {plotindex : 1, nodeindex : node_index});
+            var contentString = '<div id="content">'+
+                '<h4 id="firstHeading" class="firstHeading">' + element[2] + '</h4>' +
+                '<div id="bodyContent"><p>' +
+                'Latitude: ' + lat + '<br>' + 
+                'Longitude: ' + lon + '<br>' + 
+                'Heart rate: ' + heartrate + '<br>' +
+                'Steps: ' + steps + '<br>' +
+                '<button class="btn btn-block" onclick="zoom_in_chart(' + element[3] + ')">Zoom in chart</button>' +
+                '<button class="btn btn-block" onclick="toggleInterest(' + i.toString() + ')">Set/Remove interesting mark</button>' +
+                '</p></div></div>';
+
+            var infowindow = new google.maps.InfoWindow({
+                content: contentString
+            });
+
+            marker.addListener('click', function() {
+                infowindow.open(map, marker);
+                var newMarker_chart = new Marker_chart(element[3]);
+                myConfig["scale-x"]["markers"] = [newMarker_chart];
+                zingchart.exec('myChart', 'setdata', {
+                    data: myConfig
+                });
+            });
+
+            markers.push(marker);
+            interest.push(false);
+            markers_times.push(element[3]);
+            i++;
+        });
+
+        var poly = new google.maps.Polyline({
+            path: points,
+            strokeColor: "#ffff00",
+            strokeOpacity: .7,
+            icons: [{
+                icon: {path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW},
+                offset: '100%',
+                repeat: '200px'
+            }],
+            strokeWeight: 4
+        });
+        poly.setMap(map);
+        // Fit bounds to track
+        map.fitBounds(bounds);
+        // For normal use
+        google.maps.event.addListener(map, 'bounds_changed', function (){
+            aNord   =   map.getBounds().getNorthEast().lat();  
+            aEst    =   map.getBounds().getNorthEast().lng();
+            aSud    =   map.getBounds().getSouthWest().lat();  
+            aWest  =   map.getBounds().getSouthWest().lng();  
+            loadMarker(aNord, aEst, aSud, aWest);
+        });
+        // For Street View
+        panorama.addListener('position_changed', function (){
+            pos = panorama.getPosition().toJSON();
+            aNord = pos['lat'] + 0.002;
+            aEst = pos['lng'] + 0.002;
+            aSud = pos['lat'] - 0.002;
+            aWest = pos['lng'] - 0.002;
+            loadMarker(aNord, aEst, aSud, aWest);
+        });
+    }
+
+    // load markers on the map
+    function loadMarker(aNord, aEst, aSud, aWest) {
+            if (!show_marker) {
+                return;
+            }
+            
+            // Collect all markers on the map
+            var markers_cur = [];
+            var i = 0;
+            markers.forEach(function(marker) {
+                if (interest[i] == false){
+                    marker.setMap(null);
+                }
+                position = marker.getPosition();
+                if (position.lat() < aNord && position.lat() > aSud &&
+                        position.lng() < aEst && position.lng() > aWest){
+                    markers_cur.push(marker)
+                }
+                i++;
+            });
+
+            // Sets 20 markers from the collected ones on the map
+            var i = 0;
+            var gap = Math.ceil(markers_cur.length / 20);
+            markers_cur.forEach(function(marker) {
+                if (i % gap == 0){
+                    marker.setMap(map);
+                }
+                i++;
+            });
+    }
+
+    // Zooms to a specific time period in the chart
+    function zoom_in_chart(time) {
+        zingchart.exec('myChart', 'zoomto', {
+            graphid : 0,
+            kmin : time - 1000*60*10,
+            kmax : time + 1000*60*10
+        });
+    }
+
+    function toggle_parallel_chart(){
+        if (parallel_chart) {
+            parallel_chart = false;
+            genConfig();
+        } else {
+            parallel_chart = true;
+            genConfig();
+        }
+        zingchart.exec('myChart', 'setdata', {
+            data: myConfig
+        });
+    }
+
+    // generate the config of the chart
+    function genConfig() {
+        labels = {{ labels | tojson }};
+        data = {{ chart_data | tojson }};
+        myConfig = {
+            "type": 'bar',
+            "zoom":{
+                "shared":true,
+            },
+            "scroll-x": {
+
+            },
+            "crosshair-x": {
+                "shared":true 
+            },
+            "labels": labels, 
+            "plot": {
+                "tooltip": {
+                    "visible": false
+                }
+            },
+            "scale-x": {
+                "zooming":true,
+                "min-value": {{ from_date }},
+                "shadow": 0,
+                "step": step_size,
+                "transform": {
+                    "type": "date",
+                    "all": "%Y-%m-%d<br />%H:%i:%s",
+                    "guide": {
+                        "visible": false
+                    },
+                    "item": {
+                        "visible": false
+                    }
+                },
+                "label": {
+                    "visible": false
+                },
+                "minor-ticks": 0
+            },
+            "series":data
+        };
+
+        if (parallel_chart){
+            configs = [];
+            for(var i=0; i < labels.length; i++) {
+                var label = labels[i];
+                label["text"] = label["text"].replace(/[0-9]/g, "0");
+                label["x"] = "90%";
+                
+                var conf = JSON.parse(JSON.stringify(myConfig));
+                conf["series"] = [data[i]];
+                conf["labels"] = [label];
+                configs.push(conf);
+            }
+
+
+            myConfig = {
+                "layout":"2x1",
+                "crosshari-x": {
+                    "shared": true
+                },
+                "graphset":configs
+            };
+        }
+    }
+
+    // Setup and render chart
+    function chart(){
+        genConfig();
+
+        zingchart.render({
+            id: 'myChart',
+            data: myConfig
+        });
+
+        zingchart.guide_mousemove = function(p) {
+            items = p['items']
+            if (items == undefined)
+                return;
+            time = items[0]['keyvalue'];
+            var i = 0;
+            while (markers_times[i] < time){
+                i++;
+            }
+            if (old_pos[0] == i) {
+                return;
+            }
+            console.log(i);
+            if (old_pos[0] != -1) {
+                markers[old_pos[0]].setMap(old_pos[1]);
+                if (interest[old_pos[0]]) {
+                    icon = "{{ url_for('static', filename='images/star_icon.png') }}";
+                    markers[old_pos[0]].setIcon(icon);
+                } else {
+                    markers[old_pos[0]].setIcon(null);
+                }
+            }
+            old_pos[0] = i;
+            old_pos[1] = markers[i].getMap();
+            markers[i].setMap(map);
+            icon = "{{ url_for('static', filename='images/dot_icon.png') }}";
+            markers[i].setIcon(icon);
+        }
+
+        zingchart.node_click = function(p) {
+            time = p["scaleval"];
+            var i = 0;
+            while (markers_times[i] < time){
+                i++;
+            }
+            console.log(i);
+            toggleInterest(i);
+        }
+    }
+
+    // Return a generated marker on the chart
+    function Marker_chart(_index) {
+        return {
+            type:'line',
+            lineColor: '#4CAF50',
+            lineWidth: 40,
+            offsetX: -20,  //offset markers to prevent overlap
+            range:[_index],
+            valueRange: 'true'
+        }
+    }
+
+    // Turn interest of one marker on or off
+    function toggleInterest(idx) {
+        if (interest[idx]) {
+            interest[idx] = false;
+            markers[idx].setIcon(null);
+            if (show_marker == false){
+                markers[idx].setMap(null);
+            }
+        } else {
+            interest[idx] = true;
+            // Marker icon: https://www.iconfinder.com/icons/314755/star_icon
+            icon = "{{ url_for('static', filename='images/star_icon.png') }}";
+            markers[idx].setIcon(icon);
+        }
+    }
+
+    // Turns marker on or off
+    function toggleMarker() {
+        if (show_marker) {
+            show_marker = false;
+            var i = 0;
+            markers.forEach(function(marker) {
+                if (interest[i] == false){
+                    marker.setMap(null);
+                }
+                i++;
+            });
+        } else {
+            show_marker = true;
+            aNord   =   map.getBounds().getNorthEast().lat();  
+            aEst    =   map.getBounds().getNorthEast().lng();
+            aSud    =   map.getBounds().getSouthWest().lat();  
+            aWest  =   map.getBounds().getSouthWest().lng();  
+            loadMarker(aNord, aEst, aSud, aWest);
+        }
+    }
+
+    chart();
+
+</script>
+
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_apiKey }}&callback=myMap"></script>
+<!--
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBVdabQfjuFfhVzrZr8_qqhcUhz8KEHOsY&callback=myMap"></script>
+To use this code on your website, get a free API key from Google.
+Read more at: https://www.w3schools.com/graphics/google_maps_basic.asp
+-->
+{% endblock %}

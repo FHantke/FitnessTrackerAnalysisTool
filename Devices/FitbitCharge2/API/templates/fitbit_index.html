@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Access Fitbit API</title>
+    </head>
+    <body>
+        <h1>Access Fitbit API</h1>
+        <form action="https://fitbit.com/oauth2/authorize" method="get">
+            <input type="hidden" name="response_type" value="code">
+            <input type="hidden" name="scope" value="activity heartrate location nutrition profile settings sleep social weight">
+            <input type="hidden" name="expires_in" value="604800">
+            <input type="hidden" name="client_id" value="{{ clientID }}">
+            <input type="hidden" name="redirect_uri" value="http://127.0.0.1:5000">
+            
+            <input type="submit" value="Sign In">
+        </form>
+    </body>
+</html>

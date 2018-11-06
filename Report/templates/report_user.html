@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="m-3">
+        {% if data|length < 1%}
+        <h1 class="text-center">No user information was found</h1>
+        {% endif %}
+        {% for user in data -%}
+        <div class="row">
+            <div class="col-lg-4 col-md-4 col-sm-4 text-center">
+                <figure class="figure" style="width:50%">
+                    <img class="figure-image image-fluid rounded" style="width:100%; height:100%;" src='{{ user["pic"] }}'></img>
+                    <figcaption class="figure-caption">The profile picture of the user.</figcaption>
+                </figure>
+            </div>
+            <div class="col-lg-8 col-md-8 col-sm-8">
+                <table class="table">
+                    <tr>
+                        <td>Name</td>
+                        <td>{{ user["name"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Gender</td>
+                        <td>{{ user["gender"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Birthday</td>
+                        <td>{{ user["birthday"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Age</td>
+                        <td>{{ user["age"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Height</td>
+                        <td>{{ user["height"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Weight</td>
+                        <td>{{ user["weight"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>City</td>
+                        <td>{{ user["city"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Country</td>
+                        <td>{{ user["country"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Create Time</td>
+                        <td>{{ user["create_time"] }}</td>
+                    </tr>
+                    <tr>
+                        <td>Last Login</td>
+                        <td>{{ user["last_login"] }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    {%- endfor %}
+</div>
+{% endblock %}
